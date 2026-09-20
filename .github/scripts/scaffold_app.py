@@ -17,7 +17,7 @@ class ProjectScaffold(BaseModel):
     files: list[GeneratedFile]
 
 def generate_with_backoff(client, model_name, prompt, max_attempts=5):
-    delay = 10.0
+    delay = 300.0
     for attempt in range(1, max_attempts + 1):
         try:
             print(f"[{model_name}] Generation attempt {attempt}/{max_attempts}...")

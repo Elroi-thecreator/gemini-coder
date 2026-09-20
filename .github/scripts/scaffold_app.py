@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import random
 from pathlib import Path
 from pydantic import BaseModel, Field
 from google import genai
@@ -15,12 +16,11 @@ class ProjectScaffold(BaseModel):
     summary: str = Field(description="High-level description of what was implemented")
     files: list[GeneratedFile]
 
-def call_gemini_with_retries(client, model_name, prompt, max_attempts=4):
-    """Retries a specific model with exponential backoff on 503 / 429."""
-    delay = 5.0
+def generate_with_backoff(client, model_name, prompt, max_attempts=5):
+    delay = 10.0
     for attempt in range(1, max_attempts + 1):
         try:
-            print(f"[{model_name}] Attempt {attempt}/{max_attempts}...")
+            print(f"[{model_name}] Generation attempt {attempt}/{max_attempts}...")
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
@@ -31,15 +31,16 @@ def call_gemini_with_retries(client, model_name, prompt, max_attempts=4):
             )
             return response
         except ServerError as e:
-            print(f"[{model_name}] ServerError 503/500 encountered: {e}")
+            print(f"[{model_name}] Server temporarily busy (503/500): {e}")
             if attempt == max_attempts:
                 raise
-            print(f"[{model_name}] Backing off for {delay:.1f}s...")
-            time.sleep(delay)
-            delay *= 2  # Exponential backoff (5s -> 10s -> 20s)
+            # Add random jitter to avoid lockstep retries
+            sleep_time = delay + random.uniform(1.0, 4.0)
+            print(f"Waiting {sleep_time:.1f}s before retrying...")
+            time.sleep(sleep_time)
+            delay *= 1.8
         except ClientError as e:
-            # Fatal client error (e.g., 404 or 400), no point retrying this specific model
-            print(f"[{model_name}] ClientError encountered: {e}")
+            print(f"Fatal client error ({getattr(e, 'code', 'unknown')}): {e}")
             raise
 
 def main():
@@ -66,25 +67,15 @@ def main():
     3. Ensure file paths are relative to repository root.
     """
 
-    # Active Gemini 3 models only
-    active_models = ["gemini-3.6-flash", "gemini-3.1-pro-preview"]
-    response = None
-
-    for model_name in active_models:
-        try:
-            response = call_gemini_with_retries(client, model_name, prompt)
-            if response and response.text:
-                print(f"Successfully generated code using {model_name}.")
-                break
-        except Exception as e:
-            print(f"Skipping {model_name} due to unrecoverable failure: {e}")
+    model_name = "gemini-3.6-flash"
+    response = generate_with_backoff(client, model_name, prompt)
 
     if not response or not response.text:
-        raise RuntimeError("Could not generate code across active Gemini models. Please retry.")
+        raise RuntimeError("Model returned an empty response.")
 
     result = ProjectScaffold.model_validate_json(response.text)
     
-    print(f"Summary: {result.summary}")
+    print(f"\n--- Scaffold Completed: {result.summary} ---")
     for item in result.files:
         file_path = Path(item.path)
         file_path.parent.mkdir(parents=True, exist_ok=True)

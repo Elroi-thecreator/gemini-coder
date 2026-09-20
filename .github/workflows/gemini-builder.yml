@@ -1,0 +1,59 @@
+name: Gemini Application Builder
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  build-and-pr:
+    if: github.event.label.name == 'build-app'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Generator Dependencies
+        run: pip install google-genai pydantic
+
+      - name: Run Gemini Scaffolder
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python .github/scripts/scaffold_app.py
+
+      - name: Create Pull Request with Generated App
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "feat: scaffold application from issue #${{ github.event.issue.number }}"
+          branch: "ai/scaffold-issue-${{ github.event.issue.number }}"
+          title: "🤖 AI Scaffold: ${{ github.event.issue.title }}"
+          body: |
+            Closes #${{ github.event.issue.number }}
+            
+            This application was generated from scratch by Google Gemini based on the requirements in #${{ github.event.issue.number }}.
+            
+            Please review the generated code and test suite before merging.
+          labels: automated-pr
+
+      - name: Comment on Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🚀 Gemini has generated your application and opened a Pull Request for review!'
+            })

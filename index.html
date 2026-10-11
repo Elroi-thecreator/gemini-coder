@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI-Powered Hybrid Calculator</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+<header>
+<h1>AI-Powered Hybrid Calculator</h1>
+<button id="themeToggle">🌓</button>
+</header>
+<main>
+<section class="calculator">
+<div class="display">
+<div id="expression"></div>
+<div id="result"></div>
+<button id="copyResult">Copy</button>
+</div>
+<div class="input-mode">
+<button id="keypadMode" class="active">Keypad</button>
+<button id="nlMode">Natural Language</button>
+</div>
+<div id="keypad" class="mode-panel active">
+<!-- Keypad buttons will be injected by script -->
+</div>
+<div id="nlPrompt" class="mode-panel">
+<input type="text" id="nlInput" placeholder="Ask a math question...">
+<div id="quickChips">
+<button class="chip">Finance</button>
+<button class="chip">Conversions</button>
+<button class="chip">Algebra</button>
+<button class="chip">Geometry</button>
+</div>
+<button id="nlSubmit">Calculate</button>
+</div>
+</section>
+<aside id="sidebar">
+<div id="historyPanel">
+<h3>History <button id="clearHistory">Clear</button> <button id="exportHistory">Export CSV</button></h3>
+<ul id="historyList"></ul>
+</div>
+<div id="breakdownPanel">
+<h3>Step-by-Step Breakdown</h3>
+<div id="breakdownContent"></div>
+</div>
+</aside>
+</main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mathjs@11.0.0/dist/math.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>

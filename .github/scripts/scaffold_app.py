@@ -10,19 +10,19 @@ from openai import OpenAI, APIError, APITimeoutError, RateLimitError, BadRequest
 
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
-# Ordered list of fast coding/instruct models on NVIDIA NIM API
-# Prioritizes low-latency non-reasoning instruct/coding models first to avoid long queue/thinking timeouts
+# Active models verified on NVIDIA NIM for this account
 DEFAULT_NVIDIA_MODELS = [
-    "mistralai/codestral-22b-instruct-v0.1",
-    "google/gemma-4-31b-it",
-    "google/gemma-3-12b-it",
-    "nvidia/llama-3.1-nemotron-70b-instruct",
-    "mistralai/mistral-large-2-instruct",
-    "nv-mistralai/mistral-nemo-12b-instruct",
     "z-ai/glm-5.3-flash",
     "deepseek-ai/deepseek-v4.1-flash",
+    "google/gemma-4-31b-it",
     "moonshotai/kimi-k3",
+    "moonshotai/kimi-k2.6",
+    "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "nvidia/nemotron-3-super-120b-a12b",
 ]
+
+# Minimum cooldown interval between any two consecutive API requests (seconds)
+BASE_REQUEST_INTERVAL_SECONDS = 15.0
 
 
 class GeneratedFile(BaseModel):
@@ -87,17 +87,24 @@ def extract_scaffold_from_text(raw_text: str) -> ProjectScaffold:
     raise ValueError(f"Could not parse valid ProjectScaffold JSON from model output:\n{cleaned[:500]}")
 
 
+def wait_between_requests(base_delay: float = BASE_REQUEST_INTERVAL_SECONDS) -> None:
+    """Wait with jitter between consecutive API calls to avoid rate/concurrency throttling."""
+    sleep_s = base_delay + random.uniform(2.0, 5.0)
+    print(f"Waiting {sleep_s:.1f}s before next API request...", flush=True)
+    time.sleep(sleep_s)
+
+
 def generate_with_nvidia(
     api_key: str,
     prompt: str,
     preferred_model: Optional[str] = None,
-    max_attempts_per_model: int = 1,
+    max_attempts_per_model: int = 2,
 ) -> ProjectScaffold:
-    """Call NVIDIA OpenAI-compatible API with fast model failover and bounded request timeout."""
+    """Call NVIDIA OpenAI-compatible API using streaming and enforced cooldown intervals between requests."""
     client = OpenAI(
         base_url=NVIDIA_BASE_URL,
         api_key=api_key,
-        timeout=45.0,
+        timeout=90.0,
         max_retries=0,
     )
 
@@ -116,27 +123,50 @@ def generate_with_nvidia(
     )
 
     last_error: Optional[Exception] = None
+    is_first_request = True
 
     for model_name in models_to_try:
-        delay = 3.0
+        delay = BASE_REQUEST_INTERVAL_SECONDS
         for attempt in range(1, max_attempts_per_model + 1):
+            if not is_first_request:
+                wait_between_requests(delay)
+            is_first_request = False
+
             try:
                 print(
-                    f"[NVIDIA: {model_name}] Generation attempt {attempt}/{max_attempts_per_model}...",
+                    f"[NVIDIA: {model_name}] Streaming generation attempt {attempt}/{max_attempts_per_model}...",
                     flush=True,
                 )
-                completion = client.chat.completions.create(
+                start_time = time.time()
+                stream = client.chat.completions.create(
                     model=model_name,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.2,
-                    max_tokens=4096,
+                    max_tokens=8192,
+                    stream=True,
                 )
-                content = completion.choices[0].message.content if completion.choices else None
+
+                content_parts: list[str] = []
+                for chunk in stream:
+                    if not chunk.choices:
+                        continue
+                    delta = chunk.choices[0].delta
+                    text_piece = getattr(delta, "content", None)
+                    if text_piece:
+                        content_parts.append(text_piece)
+
+                elapsed = time.time() - start_time
+                content = "".join(content_parts).strip()
+                print(
+                    f"[NVIDIA: {model_name}] Stream finished in {elapsed:.1f}s ({len(content)} chars).",
+                    flush=True,
+                )
+
                 if not content:
-                    raise RuntimeError(f"Model {model_name} returned an empty message content.")
+                    raise RuntimeError(f"Model {model_name} returned empty streamed content.")
 
                 scaffold = extract_scaffold_from_text(content)
                 if not scaffold.files:
@@ -151,21 +181,15 @@ def generate_with_nvidia(
             except (RateLimitError, APITimeoutError) as e:
                 last_error = e
                 print(f"[{model_name}] Rate limit or timeout: {e}", flush=True)
-                if attempt < max_attempts_per_model:
-                    sleep_s = delay + random.uniform(0.5, 1.5)
-                    time.sleep(sleep_s)
-                    delay *= 2.0
+                delay *= 1.5
             except BadRequestError as e:
                 last_error = e
-                print(f"[{model_name}] Bad request / model unavailable ({e}); trying next model...", flush=True)
+                print(f"[{model_name}] Bad request / model unavailable ({e}); moving to next model...", flush=True)
                 break
             except (APIError, Exception) as e:
                 last_error = e
                 print(f"[{model_name}] Attempt {attempt} failed: {e}", flush=True)
-                if attempt < max_attempts_per_model:
-                    sleep_s = delay + random.uniform(0.5, 1.5)
-                    time.sleep(sleep_s)
-                    delay *= 2.0
+                delay *= 1.5
 
     raise RuntimeError(f"All NVIDIA model attempts failed. Last error: {last_error}")
 

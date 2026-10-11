@@ -1,23 +1,24 @@
 id: DEV-001
 type: development
-title: Resilient Structured JSON Extraction and Path Sanitization for LLM Code Generation
+title: Resilient Structured JSON Extraction, Request Pacing, and Path Sanitization
 domain: development
 status: approved
-version: "1.0.0"
+version: "1.1.0"
 rule: >-
-  All LLM responses in .github/scripts/scaffold_app.py must be parsed through extract_scaffold_from_text(),
-  which strips reasoning blocks (<think>...</think>) and markdown code fences before validating against the
-  Pydantic ProjectScaffold schema, and all output file paths must pass sanitize_relative_path().
+  All LLM responses in .github/scripts/scaffold_app.py must be streamed (stream=True), parsed through
+  extract_scaffold_from_text(), paced with a mandatory cooldown interval (wait_between_requests, >=15s + jitter)
+  between any two consecutive API calls (including across model failovers), and validated via sanitize_relative_path().
 do:
+  - Enforce a 15-20s cooldown delay before every subsequent API request (both same-model retries and cross-model failovers) so requests are never fired back-to-back.
   - Strip <think>...</think> blocks and markdown code fences before Pydantic JSON validation.
   - Normalize backslashes, strip leading slashes/dots, and reject '..' traversal or reserved root folders (.github, knowledge).
-  - Keep retry backoff intervals short (starting at 5s) with bounded attempts per model before failing over.
 dont:
+  - Do not fire consecutive API requests immediately without a cooldown interval when retrying or switching models.
   - Do not assume every OpenAI-compatible model returns raw unwrapped JSON without markdown fences or thinking tags.
   - Do not write raw LLM-supplied file paths to disk without path traversal validation.
 reason: >-
-  Reasoning and coding models on NVIDIA NIM frequently emit <think> blocks or markdown fences; resilient
-  extraction and path sanitization prevent parsing crashes and path traversal vulnerabilities.
+  Immediate back-to-back requests trigger per-key rate or concurrency throttling on NVIDIA NIM; pacing
+  requests and using streaming ensures reliable generation.
 related_items:
   - ARCH-001
   - ADR-001

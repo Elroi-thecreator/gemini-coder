@@ -3,22 +3,23 @@ type: architecture
 title: Automated Issue-to-PR Application Scaffolder via NVIDIA NIM
 domain: architecture
 status: approved
-version: "1.1.0"
+version: "1.2.0"
 rule: >-
   The GitHub Actions workflow (.github/workflows/gemini-builder.yml) triggers on issues labeled
   'build-app' or via workflow_dispatch, resolves the issue context, invokes .github/scripts/scaffold_app.py
-  using NVIDIA_API_KEY against https://integrate.api.nvidia.com/v1, and opens a Pull Request (with a
-  direct branch-push fallback if GitHub Actions PR creation permissions are restricted).
+  using NVIDIA_API_KEY against https://integrate.api.nvidia.com/v1 with stream=True, and opens a Pull Request
+  (with a direct branch-push fallback if GitHub Actions PR creation permissions are restricted).
 do:
   - Use secrets.NVIDIA_API_KEY in GitHub Actions to authenticate with the NVIDIA NIM OpenAI-compatible endpoint.
-  - Prioritize low-latency non-reasoning coding/instruct models (e.g. mistralai/codestral-22b-instruct-v0.1, google/gemma-4-31b-it, nvidia/llama-3.1-nemotron-70b-instruct) with bounded per-request timeouts (45s, max_retries=0) for fast failover.
+  - Use stream=True with max_tokens=8192 across verified active NVIDIA NIM models (z-ai/glm-5.3-flash, deepseek-ai/deepseek-v4.1-flash, google/gemma-4-31b-it, moonshotai/kimi-k3, moonshotai/kimi-k2.6, nvidia/nemotron-3.5-lightning-30b-a3b, nvidia/nemotron-3-super-120b-a12b) so reasoning + code generation does not time out waiting for unary buffering.
   - Provide a git branch push fallback if peter-evans/create-pull-request is blocked by repository PR settings.
 dont:
-  - Do not place slow reasoning models with large hidden thinking budgets ahead of fast coding models or allow SDK internal retries to multiply request timeouts.
+  - Do not use stream=False with short client timeouts on reasoning/coding models that buffer full responses server-side.
+  - Do not include deprecated/404 NIM function IDs (e.g. mistralai/codestral-22b-instruct-v0.1) in the model list.
   - Do not allow generated files to overwrite reserved repository directories (.github, knowledge).
 reason: >-
-  Ensures reliable, fast CI execution within seconds and prevents workflow stalls caused by reasoning-token
-  queues, rate limits, or repository PR permission settings.
+  NVIDIA NIM active models buffer non-streaming responses until all reasoning and output tokens complete;
+  streaming mode delivers chunks continuously and avoids client-side read timeouts.
 related_items:
   - DEV-001
   - ADR-001

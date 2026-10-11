@@ -1,0 +1,38 @@
+{
+  "note": "TNERC bi-monthly tariff configuration. Update rates here when TNERC announces revisions.",
+  "billingCycleMonths": 2,
+  "domestic": {
+    "label": "Domestic (LT-1A)",
+    "freeUnits": 100,
+    "freeUnitsMaxConsumption": 500,
+    "slabs": [
+      { "from": 0, "to": 100, "rate": 0.0 },
+      { "from": 100, "to": 200, "rate": 2.25 },
+      { "from": 200, "to": 400, "rate": 4.5 },
+      { "from": 400, "to": 500, "rate": 6.0 },
+      { "from": 500, "to": 600, "rate": 8.0 },
+      { "from": 600, "to": 800, "rate": 9.0 },
+      { "from": 800, "to": 1000, "rate": 10.0 },
+      { "from": 1000, "to": null, "rate": 11.0 }
+    ],
+    "fixedCharges": { "singlePhase": 30, "threePhase": 100 },
+    "meterCharges": 0
+  },
+  "commercial": {
+    "label": "Commercial (LT-2A)",
+    "freeUnits": 0,
+    "slabs": [
+      { "from": 0, "to": 100, "rate": 5.0 },
+      { "from": 100, "to": null, "rate": 8.05 }
+    ],
+    "fixedChargesPerKW": 70,
+    "meterCharges": 20
+  },
+  "common": {
+    "label": "Common Supply (Apartments)",
+    "freeUnits": 0,
+    "flatRate": 8.0,
+    "fixedCharges": { "singlePhase": 50, "threePhase": 150 },
+    "meterCharges": 0
+  }
+}

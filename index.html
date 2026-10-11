@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Simple Work — a minimal blog about craft, code, and clarity." />
+  <title>Simple Work — Blog</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="logo" href="#">simple<span>work</span></a>
+      <nav class="nav" aria-label="Main navigation">
+        <a href="#posts">Posts</a>
+        <a href="#about">About</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">🌙</button>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero container">
+      <h1>Notes on doing <em>simple work</em>.</h1>
+      <p>Short essays on craft, code, and cutting the unnecessary.</p>
+      <form id="search-form" class="search" role="search">
+        <input id="search-input" type="search" placeholder="Search posts…" aria-label="Search posts" />
+      </form>
+    </section>
+
+    <section id="posts" class="container posts" aria-live="polite">
+      <!-- Posts rendered by script.js -->
+    </section>
+    <p id="no-results" class="no-results container" hidden>No posts match your search.</p>
+
+    <section id="about" class="container about">
+      <h2>About</h2>
+      <p>
+        Simple Work is a one-page blog built with plain HTML, CSS, and JavaScript —
+        no frameworks, no build step. It exists to prove that less can still be plenty.
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>© 2025 Simple Work. Written by hand, shipped with care.</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

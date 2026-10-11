@@ -21,8 +21,11 @@ DEFAULT_NVIDIA_MODELS = [
     "nvidia/nemotron-3-super-120b-a12b",
 ]
 
+# Default API response timeout (seconds) - 300s (5 minutes) to allow long reasoning and multi-file code generation
+DEFAULT_API_TIMEOUT_SECONDS = float(os.environ.get("NVIDIA_API_TIMEOUT", "300.0"))
+
 # Minimum cooldown interval between any two consecutive API requests (seconds)
-BASE_REQUEST_INTERVAL_SECONDS = 15.0
+BASE_REQUEST_INTERVAL_SECONDS = float(os.environ.get("NVIDIA_REQUEST_INTERVAL", "30.0"))
 
 
 class GeneratedFile(BaseModel):
@@ -104,7 +107,7 @@ def generate_with_nvidia(
     client = OpenAI(
         base_url=NVIDIA_BASE_URL,
         api_key=api_key,
-        timeout=90.0,
+        timeout=DEFAULT_API_TIMEOUT_SECONDS,
         max_retries=0,
     )
 
@@ -134,7 +137,8 @@ def generate_with_nvidia(
 
             try:
                 print(
-                    f"[NVIDIA: {model_name}] Streaming generation attempt {attempt}/{max_attempts_per_model}...",
+                    f"[NVIDIA: {model_name}] Streaming generation attempt {attempt}/{max_attempts_per_model} "
+                    f"(timeout={DEFAULT_API_TIMEOUT_SECONDS:.0f}s)...",
                     flush=True,
                 )
                 start_time = time.time()
@@ -145,7 +149,7 @@ def generate_with_nvidia(
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.2,
-                    max_tokens=8192,
+                    max_tokens=16384,
                     stream=True,
                 )
 

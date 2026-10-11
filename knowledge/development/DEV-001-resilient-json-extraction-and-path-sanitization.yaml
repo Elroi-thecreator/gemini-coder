@@ -3,22 +3,24 @@ type: development
 title: Resilient Structured JSON Extraction, Request Pacing, and Path Sanitization
 domain: development
 status: approved
-version: "1.1.0"
+version: "1.2.0"
 rule: >-
-  All LLM responses in .github/scripts/scaffold_app.py must be streamed (stream=True), parsed through
-  extract_scaffold_from_text(), paced with a mandatory cooldown interval (wait_between_requests, >=15s + jitter)
-  between any two consecutive API calls (including across model failovers), and validated via sanitize_relative_path().
+  All LLM responses in .github/scripts/scaffold_app.py must be streamed (stream=True) with a 300s timeout
+  (DEFAULT_API_TIMEOUT_SECONDS = 300.0), parsed through extract_scaffold_from_text(), paced with a mandatory
+  cooldown interval (wait_between_requests, >=30s + jitter) between any two consecutive API calls, and validated
+  via sanitize_relative_path().
 do:
-  - Enforce a 15-20s cooldown delay before every subsequent API request (both same-model retries and cross-model failovers) so requests are never fired back-to-back.
+  - Configure DEFAULT_API_TIMEOUT_SECONDS = 300.0 (overridable via NVIDIA_API_TIMEOUT) and max_tokens = 16384 to allow ample response time for complex app generation.
+  - Enforce a 30s+ cooldown delay (overridable via NVIDIA_REQUEST_INTERVAL) before every subsequent API request so requests are never fired back-to-back.
   - Strip <think>...</think> blocks and markdown code fences before Pydantic JSON validation.
   - Normalize backslashes, strip leading slashes/dots, and reject '..' traversal or reserved root folders (.github, knowledge).
 dont:
   - Do not fire consecutive API requests immediately without a cooldown interval when retrying or switching models.
-  - Do not assume every OpenAI-compatible model returns raw unwrapped JSON without markdown fences or thinking tags.
+  - Do not use tight client timeouts that cut off models during thinking or large file generation.
   - Do not write raw LLM-supplied file paths to disk without path traversal validation.
 reason: >-
-  Immediate back-to-back requests trigger per-key rate or concurrency throttling on NVIDIA NIM; pacing
-  requests and using streaming ensures reliable generation.
+  Ample response timeout (300s) combined with request pacing (30s+) prevents both premature timeouts on large
+  generations and rate/concurrency throttling on NVIDIA NIM.
 related_items:
   - ARCH-001
   - ADR-001

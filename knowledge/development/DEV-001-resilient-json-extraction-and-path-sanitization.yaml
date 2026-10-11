@@ -1,0 +1,23 @@
+id: DEV-001
+type: development
+title: Resilient Structured JSON Extraction and Path Sanitization for LLM Code Generation
+domain: development
+status: approved
+version: "1.0.0"
+rule: >-
+  All LLM responses in .github/scripts/scaffold_app.py must be parsed through extract_scaffold_from_text(),
+  which strips reasoning blocks (<think>...</think>) and markdown code fences before validating against the
+  Pydantic ProjectScaffold schema, and all output file paths must pass sanitize_relative_path().
+do:
+  - Strip <think>...</think> blocks and markdown code fences before Pydantic JSON validation.
+  - Normalize backslashes, strip leading slashes/dots, and reject '..' traversal or reserved root folders (.github, knowledge).
+  - Keep retry backoff intervals short (starting at 5s) with bounded attempts per model before failing over.
+dont:
+  - Do not assume every OpenAI-compatible model returns raw unwrapped JSON without markdown fences or thinking tags.
+  - Do not write raw LLM-supplied file paths to disk without path traversal validation.
+reason: >-
+  Reasoning and coding models on NVIDIA NIM frequently emit <think> blocks or markdown fences; resilient
+  extraction and path sanitization prevent parsing crashes and path traversal vulnerabilities.
+related_items:
+  - ARCH-001
+  - ADR-001

@@ -2,11 +2,20 @@ name: Gemini Application Builder
 
 on:
   issues:
-    types: [labeled]
+    types: [opened, labeled, reopened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to scaffold (optional; defaults to latest open build-app issue)'
+        required: false
+        type: string
 
 jobs:
   build-and-pr:
-    if: github.event.label.name == 'build-app'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.label.name == 'build-app' ||
+      contains(github.event.issue.labels.*.name, 'build-app')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -17,43 +26,99 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Resolve Issue Context
+        id: issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let issue = context.payload.issue;
+            if (!issue) {
+              const requestedNumber = '${{ inputs.issue_number }}'.trim();
+              if (requestedNumber) {
+                const { data } = await github.rest.issues.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: parseInt(requestedNumber, 10),
+                });
+                issue = data;
+              } else {
+                const { data: issues } = await github.rest.issues.listForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  labels: 'build-app',
+                  per_page: 1,
+                });
+                if (issues.length === 0) {
+                  core.setFailed('No open issue with label "build-app" found.');
+                  return;
+                }
+                issue = issues[0];
+              }
+            }
+            core.setOutput('number', String(issue.number));
+            core.setOutput('title', issue.title || 'Scaffolded Application');
+            core.setOutput('body', issue.body || '');
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install Generator Dependencies
-        run: pip install google-genai pydantic
+        run: pip install openai pydantic
 
-      - name: Run Gemini Scaffolder
+      - name: Run NVIDIA AI Scaffolder
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          ISSUE_TITLE: ${{ steps.issue.outputs.title }}
+          ISSUE_BODY: ${{ steps.issue.outputs.body }}
         run: python .github/scripts/scaffold_app.py
 
       - name: Create Pull Request with Generated App
+        id: cpr
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "feat: scaffold application from issue #${{ github.event.issue.number }}"
-          branch: "ai/scaffold-issue-${{ github.event.issue.number }}"
-          title: "🤖 AI Scaffold: ${{ github.event.issue.title }}"
+          commit-message: "feat: scaffold application from issue #${{ steps.issue.outputs.number }}"
+          branch: "ai/scaffold-issue-${{ steps.issue.outputs.number }}"
+          title: "🤖 AI Scaffold: ${{ steps.issue.outputs.title }}"
           body: |
-            Closes #${{ github.event.issue.number }}
-            
-            This application was generated from scratch by Google Gemini based on the requirements in #${{ github.event.issue.number }}.
-            
-            Please review the generated code and test suite before merging.
-          labels: automated-pr
+            Closes #${{ steps.issue.outputs.number }}
+
+            This application was generated automatically using NVIDIA NIM based on the requirements in #${{ steps.issue.outputs.number }}.
+
+            Please review the generated code before merging.
+
+      - name: Fallback Branch Push (if PR creation blocked by repo settings)
+        id: fallback_push
+        if: steps.cpr.outcome != 'success'
+        run: |
+          BRANCH_NAME="ai/scaffold-issue-${{ steps.issue.outputs.number }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH_NAME"
+          git add -A
+          git diff --cached --quiet || git commit -m "feat: scaffold application from issue #${{ steps.issue.outputs.number }}"
+          git push -f origin "$BRANCH_NAME"
 
       - name: Comment on Issue
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            const issueNumber = parseInt('${{ steps.issue.outputs.number }}', 10);
+            const prUrl = '${{ steps.cpr.outputs.pull-request-url }}'.trim();
+            const branchName = `ai/scaffold-issue-${issueNumber}`;
+            const compareUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/compare/main...${branchName}?expand=1`;
+
+            const body = prUrl
+              ? `🚀 AI Scaffolder has generated your application and opened a Pull Request for review: ${prUrl}`
+              : `🚀 AI Scaffolder has generated your application on branch [\`${branchName}\`](https://github.com/${context.repo.owner}/${context.repo.repo}/tree/${branchName})!\n\n👉 [Click here to open the Pull Request](${compareUrl})`;
+
+            await github.rest.issues.createComment({
+              issue_number: issueNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: '🚀 Gemini has generated your application and opened a Pull Request for review!'
-            })
+              body,
+            });

@@ -1,0 +1,22 @@
+project: gemini-coder
+version: "1.0.0"
+last_updated: "2026-10-11"
+knowledge_units_count: 3
+
+domains:
+  architecture:
+    - id: ARCH-001
+      title: Automated Issue-to-PR Application Scaffolder via NVIDIA NIM
+      path: architecture/ARCH-001-nvidia-nim-scaffolder.yaml
+      status: approved
+  development:
+    - id: DEV-001
+      title: Resilient Structured JSON Extraction and Path Sanitization for LLM Code Generation
+      path: development/DEV-001-resilient-json-extraction-and-path-sanitization.yaml
+      status: approved
+  product: []
+  decisions:
+    - id: ADR-001
+      title: Migrate Application Scaffolder to NVIDIA NIM OpenAI-Compatible API
+      path: decisions/ADR-001-migrate-to-nvidia-nim-openai-api.yaml
+      status: approved

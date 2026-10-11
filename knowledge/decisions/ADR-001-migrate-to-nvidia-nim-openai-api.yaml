@@ -1,0 +1,20 @@
+id: ADR-001
+type: decision
+title: Migrate Application Scaffolder to NVIDIA NIM OpenAI-Compatible API
+domain: decisions
+status: approved
+version: "1.0.0"
+rule: >-
+  Use the NVIDIA NIM OpenAI-compatible API (https://integrate.api.nvidia.com/v1) authenticated via
+  NVIDIA_API_KEY and the official openai Python SDK for automated application scaffolding.
+do:
+  - Configure the OpenAI client with base_url="https://integrate.api.nvidia.com/v1" and api_key=os.environ["NVIDIA_API_KEY"].
+  - Allow overriding the primary model via the NVIDIA_MODEL environment variable while defaulting to verified catalog models.
+dont:
+  - Do not call non-existent model IDs (such as gemini-3.6-flash) or use 300-second initial backoff delays.
+reason: >-
+  The repository owner configured NVIDIA_API_KEY in GitHub repository secrets to power automated app generation
+  via NVIDIA NIM endpoints, replacing the failing legacy scaffolder configuration.
+related_items:
+  - ARCH-001
+  - DEV-001

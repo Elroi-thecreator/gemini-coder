@@ -10,16 +10,18 @@ from openai import OpenAI, APIError, APITimeoutError, RateLimitError, BadRequest
 
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
-# Ordered list of live coding/instruct models available on NVIDIA NIM API
+# Ordered list of fast coding/instruct models on NVIDIA NIM API
+# Prioritizes low-latency non-reasoning instruct/coding models first to avoid long queue/thinking timeouts
 DEFAULT_NVIDIA_MODELS = [
-    "deepseek-ai/deepseek-v4.1-flash",
-    "moonshotai/kimi-k3",
-    "nvidia/nemotron-3-super-120b-a12b",
-    "google/gemma-4-31b-it",
     "mistralai/codestral-22b-instruct-v0.1",
+    "google/gemma-4-31b-it",
+    "google/gemma-3-12b-it",
     "nvidia/llama-3.1-nemotron-70b-instruct",
     "mistralai/mistral-large-2-instruct",
+    "nv-mistralai/mistral-nemo-12b-instruct",
     "z-ai/glm-5.3-flash",
+    "deepseek-ai/deepseek-v4.1-flash",
+    "moonshotai/kimi-k3",
 ]
 
 
@@ -89,13 +91,14 @@ def generate_with_nvidia(
     api_key: str,
     prompt: str,
     preferred_model: Optional[str] = None,
-    max_attempts_per_model: int = 2,
+    max_attempts_per_model: int = 1,
 ) -> ProjectScaffold:
-    """Call NVIDIA OpenAI-compatible API with model fallback and fast exponential backoff."""
+    """Call NVIDIA OpenAI-compatible API with fast model failover and bounded request timeout."""
     client = OpenAI(
         base_url=NVIDIA_BASE_URL,
         api_key=api_key,
-        timeout=120.0,
+        timeout=45.0,
+        max_retries=0,
     )
 
     models_to_try = []
@@ -115,10 +118,13 @@ def generate_with_nvidia(
     last_error: Optional[Exception] = None
 
     for model_name in models_to_try:
-        delay = 5.0
+        delay = 3.0
         for attempt in range(1, max_attempts_per_model + 1):
             try:
-                print(f"[NVIDIA: {model_name}] Generation attempt {attempt}/{max_attempts_per_model}...")
+                print(
+                    f"[NVIDIA: {model_name}] Generation attempt {attempt}/{max_attempts_per_model}...",
+                    flush=True,
+                )
                 completion = client.chat.completions.create(
                     model=model_name,
                     messages=[
@@ -136,26 +142,28 @@ def generate_with_nvidia(
                 if not scaffold.files:
                     raise ValueError(f"Model {model_name} returned an empty files list.")
 
-                print(f"[NVIDIA: {model_name}] Successfully generated {len(scaffold.files)} file(s).")
+                print(
+                    f"[NVIDIA: {model_name}] Successfully generated {len(scaffold.files)} file(s).",
+                    flush=True,
+                )
                 return scaffold
 
             except (RateLimitError, APITimeoutError) as e:
                 last_error = e
-                print(f"[{model_name}] Rate limit or timeout: {e}")
+                print(f"[{model_name}] Rate limit or timeout: {e}", flush=True)
                 if attempt < max_attempts_per_model:
-                    sleep_s = delay + random.uniform(0.5, 2.0)
-                    print(f"Waiting {sleep_s:.1f}s before retry...")
+                    sleep_s = delay + random.uniform(0.5, 1.5)
                     time.sleep(sleep_s)
                     delay *= 2.0
             except BadRequestError as e:
                 last_error = e
-                print(f"[{model_name}] Bad request / model unavailable ({e}); trying next model...")
+                print(f"[{model_name}] Bad request / model unavailable ({e}); trying next model...", flush=True)
                 break
             except (APIError, Exception) as e:
                 last_error = e
-                print(f"[{model_name}] Attempt {attempt} failed: {e}")
+                print(f"[{model_name}] Attempt {attempt} failed: {e}", flush=True)
                 if attempt < max_attempts_per_model:
-                    sleep_s = delay + random.uniform(0.5, 2.0)
+                    sleep_s = delay + random.uniform(0.5, 1.5)
                     time.sleep(sleep_s)
                     delay *= 2.0
 
@@ -205,7 +213,7 @@ Constraints:
         file_path = sanitize_relative_path(item.path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(item.content, encoding="utf-8")
-        print(f"Created: {file_path.as_posix()}")
+        print(f"Created: {file_path.as_posix()}", flush=True)
         created_count += 1
 
     if created_count == 0:

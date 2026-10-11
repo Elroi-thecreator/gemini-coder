@@ -3,7 +3,7 @@ type: architecture
 title: Automated Issue-to-PR Application Scaffolder via NVIDIA NIM
 domain: architecture
 status: approved
-version: "1.0.0"
+version: "1.1.0"
 rule: >-
   The GitHub Actions workflow (.github/workflows/gemini-builder.yml) triggers on issues labeled
   'build-app' or via workflow_dispatch, resolves the issue context, invokes .github/scripts/scaffold_app.py
@@ -11,14 +11,14 @@ rule: >-
   direct branch-push fallback if GitHub Actions PR creation permissions are restricted).
 do:
   - Use secrets.NVIDIA_API_KEY in GitHub Actions to authenticate with the NVIDIA NIM OpenAI-compatible endpoint.
-  - Maintain an ordered fallback list of active NVIDIA NIM coding/instruct models so transient model errors or rate limits do not fail the workflow.
+  - Prioritize low-latency non-reasoning coding/instruct models (e.g. mistralai/codestral-22b-instruct-v0.1, google/gemma-4-31b-it, nvidia/llama-3.1-nemotron-70b-instruct) with bounded per-request timeouts (45s, max_retries=0) for fast failover.
   - Provide a git branch push fallback if peter-evans/create-pull-request is blocked by repository PR settings.
 dont:
-  - Do not hardcode a single unverified model ID without fallback or use multi-minute initial retry sleep intervals in CI.
+  - Do not place slow reasoning models with large hidden thinking budgets ahead of fast coding models or allow SDK internal retries to multiply request timeouts.
   - Do not allow generated files to overwrite reserved repository directories (.github, knowledge).
 reason: >-
-  Ensures reliable, fast CI execution within GitHub Actions runner time limits and prevents workflow failures
-  caused by model unavailability, rate limits, or repository PR permission settings.
+  Ensures reliable, fast CI execution within seconds and prevents workflow stalls caused by reasoning-token
+  queues, rate limits, or repository PR permission settings.
 related_items:
   - DEV-001
   - ADR-001

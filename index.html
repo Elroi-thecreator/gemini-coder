@@ -2,53 +2,175 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>AI-Powered Hybrid Calculator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TNEB (TANGEDCO) Electricity Bill Calculator</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div id="app">
-<header>
-<h1>AI-Powered Hybrid Calculator</h1>
-<button id="themeToggle">🌓</button>
+<header class="app-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="logo">⚡</span>
+      <div>
+        <h1 data-i18n="title">TNEB Bill Calculator</h1>
+        <p class="subtitle" data-i18n="subtitle">TANGEDCO Bi-Monthly Electricity Bill Estimator</p>
+      </div>
+    </div>
+    <div class="lang-toggle">
+      <button id="btn-en" class="lang-btn active">English</button>
+      <button id="btn-ta" class="lang-btn">தமிழ்</button>
+    </div>
+  </div>
 </header>
-<main>
-<section class="calculator">
-<div class="display">
-<div id="expression"></div>
-<div id="result"></div>
-<button id="copyResult">Copy</button>
-</div>
-<div class="input-mode">
-<button id="keypadMode" class="active">Keypad</button>
-<button id="nlMode">Natural Language</button>
-</div>
-<div id="keypad" class="mode-panel active">
-<!-- Keypad buttons will be injected by script -->
-</div>
-<div id="nlPrompt" class="mode-panel">
-<input type="text" id="nlInput" placeholder="Ask a math question...">
-<div id="quickChips">
-<button class="chip">Finance</button>
-<button class="chip">Conversions</button>
-<button class="chip">Algebra</button>
-<button class="chip">Geometry</button>
-</div>
-<button id="nlSubmit">Calculate</button>
-</div>
-</section>
-<aside id="sidebar">
-<div id="historyPanel">
-<h3>History <button id="clearHistory">Clear</button> <button id="exportHistory">Export CSV</button></h3>
-<ul id="historyList"></ul>
-</div>
-<div id="breakdownPanel">
-<h3>Step-by-Step Breakdown</h3>
-<div id="breakdownContent"></div>
-</div>
-</aside>
+
+<main class="container">
+  <!-- ============ INPUT CARD ============ -->
+  <section class="card" id="input-card">
+    <h2 data-i18n="inputDetails">Connection Details</h2>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="category" data-i18n="tariffCategory">Tariff Category</label>
+        <select id="category">
+          <option value="domestic" data-i18n="domestic">Domestic (LT-1A)</option>
+          <option value="commercial" data-i18n="commercial">Commercial (LT-2A)</option>
+          <option value="common" data-i18n="common">Common Supply (Apartments)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label data-i18n="phase">Connection Phase</label>
+        <div class="phase-toggle">
+          <button id="phase-1" class="phase-btn active" data-i18n="singlePhase">1-Phase</button>
+          <button id="phase-3" class="phase-btn" data-i18n="threePhase">3-Phase</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label data-i18n="inputMode">Input Mode</label>
+        <div class="phase-toggle">
+          <button id="mode-units" class="phase-btn active" data-i18n="directUnits">Direct Units</button>
+          <button id="mode-meter" class="phase-btn" data-i18n="meterReadings">Meter Readings</button>
+        </div>
+      </div>
+
+      <div class="field" id="load-field" style="display:none;">
+        <label for="load" data-i18n="contractedLoad">Contracted Load (kW)</label>
+        <input type="number" id="load" min="0" step="0.5" value="1">
+      </div>
+    </div>
+
+    <div class="form-grid" id="units-input-group">
+      <div class="field">
+        <label for="units" data-i18n="unitsConsumed">Units Consumed (kWh, bi-monthly)</label>
+        <input type="number" id="units" min="0" step="1" placeholder="e.g. 350">
+      </div>
+    </div>
+
+    <div class="form-grid" id="meter-input-group" style="display:none;">
+      <div class="field">
+        <label for="prevReading" data-i18n="prevReading">Previous Meter Reading</label>
+        <input type="number" id="prevReading" min="0" step="1" placeholder="e.g. 1200">
+      </div>
+      <div class="field">
+        <label for="currReading" data-i18n="currReading">Current Meter Reading</label>
+        <input type="number" id="currReading" min="0" step="1" placeholder="e.g. 1550">
+      </div>
+    </div>
+
+    <p class="error" id="error-msg" role="alert"></p>
+
+    <button class="btn-primary" id="calc-btn" data-i18n="calculate">Calculate Bill</button>
+  </section>
+
+  <!-- ============ SLAB ALERT / WHAT-IF ============ -->
+  <section class="card hidden" id="insight-card">
+    <h2 data-i18n="slabInsights">Slab Insights</h2>
+    <div class="progress-wrap">
+      <div class="progress-labels">
+        <span>0</span><span>100</span><span>200</span><span>400</span><span>500</span><span>600+</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+        <div class="progress-marker" id="progress-marker"></div>
+      </div>
+      <p class="progress-caption" id="slab-caption"></p>
+    </div>
+    <div class="alert-banner hidden" id="alert-banner"></div>
+    <div class="whatif">
+      <label for="whatif-slider"><span data-i18n="whatIf">What-If: adjust units</span> — <strong id="whatif-value"></strong></label>
+      <input type="range" id="whatif-slider" min="0" max="1200" step="1">
+      <p id="whatif-result"></p>
+    </div>
+  </section>
+
+  <!-- ============ RECEIPT ============ -->
+  <section class="card hidden" id="receipt-card">
+    <div class="receipt" id="receipt">
+      <div class="receipt-head">
+        <h2 data-i18n="billReceipt">Bill Receipt</h2>
+        <span class="badge" id="receipt-category"></span>
+      </div>
+      <div class="receipt-row">
+        <span data-i18n="totalUnits">Total Units Consumed</span>
+        <strong id="r-units"></strong>
+      </div>
+      <div class="receipt-row" id="r-free-row">
+        <span data-i18n="freeUnits">Government Subsidy (Free Units)</span>
+        <span class="badge green" id="r-free"></span>
+      </div>
+
+      <table class="slab-table">
+        <thead>
+          <tr>
+            <th data-i18n="slabRange">Slab Range</th>
+            <th data-i18n="unitsInSlab">Units</th>
+            <th data-i18n="rate">Rate (₹/unit)</th>
+            <th data-i18n="subtotal">Subtotal (₹)</th>
+          </tr>
+        </thead>
+        <tbody id="slab-tbody"></tbody>
+      </table>
+
+      <div class="receipt-row">
+        <span data-i18n="energyCharges">Energy Charges</span>
+        <span id="r-energy"></span>
+      </div>
+      <div class="receipt-row" id="r-subsidy-row">
+        <span data-i18n="subsidy">Subsidy Discount (100 free units)</span>
+        <span id="r-subsidy" class="green-text"></span>
+      </div>
+      <div class="receipt-row">
+        <span data-i18n="fixedCharges">Fixed Charges</span>
+        <span id="r-fixed"></span>
+      </div>
+      <div class="receipt-row">
+        <span data-i18n="meterCharges">Meter / Other Charges</span>
+        <span id="r-meter"></span>
+      </div>
+      <div class="receipt-total">
+        <span data-i18n="totalPayable">Total Payable Amount</span>
+        <span id="r-total"></span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-secondary" id="copy-btn" data-i18n="copyBreakdown">Copy Breakdown</button>
+      <button class="btn-secondary" id="print-btn" data-i18n="downloadPdf">Download / Print PDF</button>
+    </div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section class="card" id="history-card">
+    <h2 data-i18n="history">Recent Calculations</h2>
+    <ul id="history-list" class="history-list"></ul>
+  </section>
+
+  <footer class="footer">
+    <p data-i18n="disclaimer">Indicative estimate based on TNERC tariff order. Verify with your official TANGEDCO bill.</p>
+  </footer>
 </main>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/mathjs@11.0.0/dist/math.min.js"></script>
+
 <script src="script.js"></script>
 </body>
 </html>

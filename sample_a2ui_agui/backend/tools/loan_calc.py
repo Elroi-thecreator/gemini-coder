@@ -74,3 +74,61 @@ def calculate_loan_emi(
         "interest_saved": round(interest_saved, 2),
         "tenure_saved_months": tenure_saved,
     }
+
+
+def calculate_tenure_from_emi(
+    amount: float,
+    annual_rate: float,
+    monthly_emi: float
+) -> Dict[str, Any]:
+    """
+    Inverse EMI calculation: Solves for the total number of months and years
+    required to pay off a loan given principal, interest rate, and monthly EMI.
+    """
+    import math
+
+    principal = float(amount)
+    rate = float(annual_rate)
+    emi = float(monthly_emi)
+
+    if principal <= 0 or emi <= 0 or rate <= 0:
+        return {"error": "Principal, interest rate, and monthly EMI must be positive."}
+
+    monthly_rate = (rate / 100.0) / 12.0
+    monthly_interest = principal * monthly_rate
+
+    if emi <= monthly_interest:
+        return {
+            "error": (
+                f"Monthly EMI ({emi:,.0f}) is less than or equal to monthly interest ({monthly_interest:,.0f}). "
+                "The loan balance will never reduce. Please enter an EMI higher than the monthly interest charge."
+            ),
+            "monthly_interest": round(monthly_interest, 2)
+        }
+
+    ratio = (principal * monthly_rate) / emi
+    total_months = -math.log(1.0 - ratio) / math.log(1.0 + monthly_rate)
+    years = int(total_months // 12)
+    rem_months = int(round(total_months % 12))
+    if rem_months == 12:
+        years += 1
+        rem_months = 0
+
+    total_payment = total_months * emi
+    total_interest = total_payment - principal
+
+    # Baseline 20-year comparison
+    r_20 = calculate_loan_emi(principal, rate, 20, 0)
+    interest_saved_vs_20yr = max(0.0, r_20["baseline_interest"] - total_interest)
+
+    return {
+        "amount": principal,
+        "rate": rate,
+        "monthly_emi": emi,
+        "total_months": round(total_months, 1),
+        "years": years,
+        "rem_months": rem_months,
+        "total_payment": round(total_payment, 2),
+        "total_interest": round(total_interest, 2),
+        "interest_saved_vs_20yr": round(interest_saved_vs_20yr, 2)
+    }

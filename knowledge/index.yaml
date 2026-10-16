@@ -1,7 +1,7 @@
 project: gemini-coder
 version: "1.0.0"
 last_updated: "2026-10-16"
-knowledge_units_count: 4
+knowledge_units_count: 5
 
 domains:
   architecture:
@@ -17,6 +17,10 @@ domains:
     - id: DEV-001
       title: Resilient Structured JSON Extraction and Path Sanitization for LLM Code Generation
       path: development/DEV-001-resilient-json-extraction-and-path-sanitization.yaml
+      status: approved
+    - id: DEV-002
+      title: Render Infrastructure as Code Blueprint and Deployment Pipeline
+      path: development/DEV-002-render-deployment-blueprint.yaml
       status: approved
   product: []
   decisions:

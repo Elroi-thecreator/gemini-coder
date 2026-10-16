@@ -1,0 +1,23 @@
+id: DEV-002
+type: development
+title: Render Infrastructure as Code Blueprint and Deployment Pipeline
+domain: development
+status: approved
+version: "1.0.0"
+rule: >-
+  The repository must maintain an Infrastructure-as-Code Render Blueprint (render.yaml) defining the web service
+  runtime, build and start commands, health check endpoints (/api/health), and environment secrets (GEMINI_API_KEY),
+  accompanied by a CI/CD workflow (.github/workflows/render-deploy.yml) that verifies imports before triggering deployment.
+do:
+  - Define Render web service specifications in render.yaml targeting python 3.12 with startCommand 'uvicorn sample_a2ui_agui.backend.server:app --host 0.0.0.0 --port $PORT'.
+  - Configure healthCheckPath to /api/health for automatic zero-downtime health probing.
+  - Set GEMINI_API_KEY with sync: false in render.yaml so secret values are managed securely in the Render dashboard.
+  - Support automated deployments via both Render Blueprint Git sync and GitHub Actions deploy hook webhooks (RENDER_DEPLOY_HOOK_URL).
+dont:
+  - Do not hardcode static ports in Render startCommand; always bind to the dynamic $PORT environment variable.
+  - Do not commit production API keys or credentials directly into render.yaml or repository files.
+reason: >-
+  Using Render Blueprints standardizes environment setup across team members and CI/CD pipelines, ensuring
+  consistent builds and safe secret management.
+related_items:
+  - ARCH-002

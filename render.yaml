@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: omnicalc-agent
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r sample_a2ui_agui/requirements.txt
+    startCommand: uvicorn sample_a2ui_agui.backend.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: GEMINI_API_KEY
+        sync: false

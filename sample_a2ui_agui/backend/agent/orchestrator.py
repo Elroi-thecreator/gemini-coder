@@ -15,7 +15,7 @@ from ..protocol.agui_events import (
     TextMessageStartEvent, TextMessageContentEvent, TextMessageEndEvent,
     ToolCallStartEvent, ToolCallEndEvent, CustomEvent
 )
-from ..tools.loan_calc import calculate_loan_emi
+from ..tools.loan_calc import calculate_loan_emi, calculate_tenure_from_emi
 from ..tools.eb_bill_calc import calculate_eb_bill
 from ..tools.budget_calc import calculate_budget
 
@@ -155,7 +155,8 @@ class OmniCalcAgent:
                     amount=params.get("amount", 400000),
                     rate=params.get("rate", 6.5),
                     tenure=params.get("tenure", 30),
-                    prepay=params.get("prepayment", 0)
+                    prepay=params.get("prepayment", 0),
+                    currency=params.get("currency", "$")
                 )
             elif surface_type == "eb":
                 surface_id = "eb-bill-calculator"
@@ -291,33 +292,103 @@ class OmniCalcAgent:
 
         # 3. Calculation Requests (Extract parameters and generate/update surface)
         # A. Home Loan Calculation
-        if any(w in p for w in ["loan", "mortgage", "emi", "housing loan", "borrow"]):
+        if any(w in p for w in ["loan", "mortgage", "emi", "housing loan", "borrow", "interest rate"]):
+            # Currency detection
+            is_indian_currency = bool(re.search(r"\b(lakh|lakhs|lac|lacs|crore|crores|inr|rs|rupee|rupees|₹)\b", p))
+            curr_sym = "₹" if is_indian_currency else "$"
+
             # Extract Amount
-            amt = 400000
+            amt = 400000.0
             m_lakh = re.search(r"(\d+(?:\.\d+)?)\s*(?:lakhs?|lac|lacs)", p)
+            m_crore = re.search(r"(\d+(?:\.\d+)?)\s*(?:crores?|cr)", p)
             m_k = re.search(r"(\d+(?:\.\d+)?)\s*(?:k|thousand)", p)
             m_num = re.search(r"\$?(\d{1,3}(?:,\d{3})+|\d{4,9})", p)
-            if m_lakh:
-                amt = float(m_lakh.group(1)) * 100000
+
+            if m_crore:
+                amt = float(m_crore.group(1)) * 10000000.0
+            elif m_lakh:
+                amt = float(m_lakh.group(1)) * 100000.0
             elif m_k:
-                amt = float(m_k.group(1)) * 1000
+                amt = float(m_k.group(1)) * 1000.0
             elif m_num:
                 amt = float(m_num.group(1).replace(",", ""))
 
-            # Extract Rate
+            # Extract Rate (e.g. "8.25 as interest", "with 8.25 interest", "rate of 8.25", "at 8.25%", "8.25%")
             rate = 6.5
-            m_rate = re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent)", p)
+            m_rate = (
+                re.search(r"(?:interest\s*rate|rate|roi|interest)\s*(?:of|is|:)?\s*(\d+(?:\.\d+)?)", p) or
+                re.search(r"(\d+(?:\.\d+)?)\s*(?:%|percent|as\s*interest|interest)", p) or
+                re.search(r"(?:at|with)\s*(\d+(?:\.\d+)?)\s*(?:as\s*interest|interest)?", p)
+            )
             if m_rate:
-                rate = float(m_rate.group(1))
+                try:
+                    val = float(m_rate.group(1))
+                    if 0.5 <= val <= 35.0:
+                        rate = val
+                except ValueError:
+                    pass
 
-            # Extract Tenure
-            tenure = 30
-            m_tenure = re.search(r"(\d+)\s*(?:years?|yrs?)", p)
+            # Extract EMI (e.g. "paying 22k as emi", "22k as emi", "emi of 22k", "paying 22000 as emi", "22000 emi")
+            monthly_emi = None
+            m_emi = (
+                re.search(r"(?:paying|pay)?\s*(\d+(?:\.\d+)?)\s*(k|thousand)?\s*(?:as\s*emi|emi)", p) or
+                re.search(r"(?:emi|monthly\s*payment)\s*(?:of|is|:)?\s*₹?\$?(\d+(?:\.\d+)?)\s*(k|thousand)?", p)
+            )
+            if m_emi:
+                try:
+                    val = float(m_emi.group(1))
+                    has_k = (m_emi.lastindex and m_emi.group(2) and "k" in m_emi.group(2).lower()) or ("k" in p[m_emi.start():m_emi.end()+3].lower())
+                    if has_k or val < 100:
+                        val *= 1000.0
+                    monthly_emi = val
+                except (ValueError, IndexError):
+                    pass
+
+            # Check if user is asking to solve for tenure (e.g. "how many years", "how long", "how many months", "when to complete")
+            is_asking_tenure = bool(re.search(r"how\s*many\s*(?:years?|months?)|how\s*long|when\s*(?:will\s*it|to)\s*(?:take\s*to\s*)?(?:complete|finish|pay\s*off)", p))
+
+            if is_asking_tenure and monthly_emi:
+                # Solve for tenure given Principal, Rate, and EMI!
+                tenure_calc = calculate_tenure_from_emi(amt, rate, monthly_emi)
+
+                if "error" in tenure_calc:
+                    text = f"⚠️ **Cannot Calculate Tenure:** {tenure_calc['error']}"
+                    return text, {"action": "none", "surface": "none"}
+
+                years = tenure_calc["years"]
+                months = tenure_calc["rem_months"]
+                total_months = tenure_calc["total_months"]
+                tot_interest = tenure_calc["total_interest"]
+                tot_payment = tenure_calc["total_payment"]
+                saved_vs_20 = tenure_calc["interest_saved_vs_20yr"]
+
+                tenure_display = f"**{years} years and {months} months**" if months > 0 else f"**{years} years**"
+                tenure_years_num = max(1, round(total_months / 12))
+
+                text = (
+                    f"For a home loan of **{curr_sym}{amt:,.0f}** at **{rate:.2f}% interest rate** paying **{curr_sym}{monthly_emi:,.0f}/month as EMI**:\n\n"
+                    f"🎯 **Time Required to Complete:** {tenure_display} (~{int(round(total_months))} months total)\n\n"
+                    f"- **Monthly EMI:** **{curr_sym}{monthly_emi:,.0f}**\n"
+                    f"- **Total Interest Payable:** **{curr_sym}{tot_interest:,.0f}**\n"
+                    f"- **Total Repayment Amount:** **{curr_sym}{tot_payment:,.0f}**\n\n"
+                    f"💡 **Tenure Advantage:** By paying {curr_sym}{monthly_emi:,.0f}/month, you pay off your loan in under {years + 1} years, "
+                    f"saving over **{curr_sym}{saved_vs_20:,.0f} in interest** compared to a standard 20-year mortgage!\n\n"
+                    f"I've updated the interactive controls on the right to match your exact {tenure_display} payoff schedule."
+                )
+
+                return text, {
+                    "action": "create",
+                    "surface": "loan",
+                    "params": {"amount": amt, "rate": rate, "tenure": tenure_years_num, "prepayment": 0, "currency": curr_sym}
+                }
+
+            # Standard Forward EMI Calculation
+            tenure = 30.0
+            m_tenure = re.search(r"(\d+(?:\.\d+)?)\s*(?:years?|yrs?)", p)
             if m_tenure:
                 tenure = float(m_tenure.group(1))
 
-            # Extract Prepayment
-            prepay = 0
+            prepay = 0.0
             m_prepay = re.search(r"(?:prepay\w*|extra)\s*(?:of\s*)?\$?(\d+(?:,\d+)*(?:\.\d+)?)", p)
             if m_prepay:
                 prepay = float(m_prepay.group(1).replace(",", ""))
@@ -325,15 +396,15 @@ class OmniCalcAgent:
             calc = calculate_loan_emi(amt, rate, tenure, prepay)
 
             text = (
-                f"I've calculated your loan for **${amt:,.0f}** at **{rate:.1f}% interest** over **{int(tenure)} years**:\n\n"
-                f"- **Monthly EMI:** **${calc['base_emi']:,.0f}** / month\n"
-                f"- **Total Interest Payable:** **${calc['baseline_interest']:,.0f}**\n"
-                f"- **Total Repayment Amount:** **${calc['baseline_total_payment']:,.0f}**\n\n"
+                f"I've calculated your loan for **{curr_sym}{amt:,.0f}** at **{rate:.2f}% interest** over **{int(tenure)} years**:\n\n"
+                f"- **Monthly EMI:** **{curr_sym}{calc['base_emi']:,.0f}** / month\n"
+                f"- **Total Interest Payable:** **{curr_sym}{calc['baseline_interest']:,.0f}**\n"
+                f"- **Total Repayment Amount:** **{curr_sym}{calc['baseline_total_payment']:,.0f}**\n\n"
             )
             if prepay > 0:
                 text += (
-                    f"💡 **Prepayment Benefit:** Adding a **${prepay:,.0f}/mo** prepayment saves you "
-                    f"**${calc['interest_saved']:,.0f}** in interest and retires your debt "
+                    f"💡 **Prepayment Benefit:** Adding a **{curr_sym}{prepay:,.0f}/mo** prepayment saves you "
+                    f"**{curr_sym}{calc['interest_saved']:,.0f}** in interest and retires your debt "
                     f"**{calc['tenure_saved_months']} months ({calc['tenure_saved_months'] // 12} yrs) early**!\n\n"
                 )
 
@@ -341,7 +412,7 @@ class OmniCalcAgent:
             return text, {
                 "action": "create",
                 "surface": "loan",
-                "params": {"amount": amt, "rate": rate, "tenure": tenure, "prepayment": prepay}
+                "params": {"amount": amt, "rate": rate, "tenure": tenure, "prepayment": prepay, "currency": curr_sym}
             }
 
         # B. Electricity (EB) Bill Calculation
@@ -418,10 +489,13 @@ class OmniCalcAgent:
         amount: float = 400000,
         rate: float = 6.5,
         tenure: float = 30,
-        prepay: float = 0
+        prepay: float = 0,
+        currency: str = "$"
     ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         calc = calculate_loan_emi(amount, rate, tenure, prepay)
         max_amount = max(1500000.0, float(amount) * 1.5)
+        min_amount = min(50000.0, float(amount) * 0.2)
+        step_amount = 10000.0 if amount < 5000000 else 50000.0
 
         data_model = {
             "loan": {
@@ -429,6 +503,7 @@ class OmniCalcAgent:
                 "rate": float(rate),
                 "tenure": float(tenure),
                 "prepayment": float(prepay),
+                "currency": currency,
                 "emi": calc["base_emi"],
                 "total_interest": calc["total_interest_paid"],
                 "total_payment": calc["baseline_total_payment"]
@@ -506,10 +581,10 @@ class OmniCalcAgent:
                 "id": "slider-amount",
                 "component": {
                     "Slider": {
-                        "label": "Loan Amount ($)",
-                        "min": 50000,
+                        "label": f"Loan Amount ({currency})",
+                        "min": min_amount,
                         "max": max_amount,
-                        "step": 10000,
+                        "step": step_amount,
                         "valuePath": "/loan/amount",
                         "format": "currency"
                     }
@@ -521,7 +596,7 @@ class OmniCalcAgent:
                     "Slider": {
                         "label": "Interest Rate (%)",
                         "min": 1.0,
-                        "max": 15.0,
+                        "max": 25.0,
                         "step": 0.1,
                         "valuePath": "/loan/rate",
                         "format": "percent",
@@ -534,8 +609,8 @@ class OmniCalcAgent:
                 "component": {
                     "Slider": {
                         "label": "Tenure (Years)",
-                        "min": 5,
-                        "max": 30,
+                        "min": 1,
+                        "max": 35,
                         "step": 1,
                         "valuePath": "/loan/tenure",
                         "format": "integer",
@@ -559,10 +634,10 @@ class OmniCalcAgent:
                 "id": "slider-prepayment",
                 "component": {
                     "Slider": {
-                        "label": "Monthly Prepayment ($)",
+                        "label": f"Monthly Prepayment ({currency})",
                         "min": 0,
-                        "max": 2000,
-                        "step": 50,
+                        "max": max(2000.0, float(amount) * 0.05),
+                        "step": 50 if amount < 500000 else 500,
                         "valuePath": "/loan/prepayment",
                         "format": "currency"
                     }

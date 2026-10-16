@@ -35,6 +35,11 @@ class A2UIEngine {
         if (!surface) return;
 
         surface.dataModel = JSON.parse(JSON.stringify(newDataModel));
+        if (surface.dataModel.currency) {
+            surface.currencySymbol = surface.dataModel.currency;
+        } else if (surface.dataModel.loan && surface.dataModel.loan.currency) {
+            surface.currencySymbol = surface.dataModel.loan.currency;
+        }
         this.refreshBoundMetrics(surfaceId);
     }
 
@@ -66,15 +71,16 @@ class A2UIEngine {
         curr[tokens[tokens.length - 1]] = value;
     }
 
-    formatValue(val, format, unit = "") {
+    formatValue(val, format, unit = "", currency = null) {
         if (val === null || val === undefined) return "--";
         const num = parseFloat(val);
         if (isNaN(num)) return String(val) + (unit ? " " + unit : "");
 
         if (format === "currency") {
-            return "$" + num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+            const sym = currency || "$";
+            return sym + num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
         } else if (format === "percent") {
-            return num.toFixed(1) + "%";
+            return num.toFixed(2) + "%";
         } else if (format === "integer") {
             return Math.round(num).toLocaleString() + (unit ? " " + unit : "");
         } else if (format === "decimal") {
@@ -155,7 +161,7 @@ class A2UIEngine {
             const val = this.getValueByPointer(surface.dataModel, path);
             bindings.forEach(binding => {
                 if (binding.prop === "textContent") {
-                    binding.el.textContent = this.formatValue(val, binding.format, binding.unit);
+                    binding.el.textContent = this.formatValue(val, binding.format, binding.unit, surface.currencySymbol);
                 } else if (binding.prop === "value") {
                     if (binding.el.value != val) binding.el.value = val;
                 }
@@ -341,11 +347,11 @@ class A2UIEngine {
 
         const initVal = this.getValueByPointer(surface.dataModel, props.valuePath) || props.min;
         slider.value = initVal;
-        valBadge.textContent = this.formatValue(initVal, props.format, props.unit);
+        valBadge.textContent = this.formatValue(initVal, props.format, props.unit, surface.currencySymbol);
 
         slider.addEventListener("input", (e) => {
             const num = parseFloat(e.target.value);
-            valBadge.textContent = this.formatValue(num, props.format, props.unit);
+            valBadge.textContent = this.formatValue(num, props.format, props.unit, surface.currencySymbol);
             this.setValueByPointer(surface.dataModel, props.valuePath, num);
             
             // 1. Instant 60fps local formula calculation

@@ -1,13 +1,17 @@
 project: gemini-coder
 version: "1.0.0"
-last_updated: "2026-10-11"
-knowledge_units_count: 3
+last_updated: "2026-10-16"
+knowledge_units_count: 4
 
 domains:
   architecture:
     - id: ARCH-001
       title: Automated Issue-to-PR Application Scaffolder via NVIDIA NIM
       path: architecture/ARCH-001-nvidia-nim-scaffolder.yaml
+      status: approved
+    - id: ARCH-002
+      title: Agentic Generative User Interface Architecture via A2UI and AG-UI
+      path: architecture/ARCH-002-a2ui-agui-hybrid-calculators.yaml
       status: approved
   development:
     - id: DEV-001

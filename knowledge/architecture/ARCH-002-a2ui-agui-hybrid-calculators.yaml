@@ -1,0 +1,27 @@
+id: ARCH-002
+type: architecture
+title: Agentic Generative User Interface Architecture via A2UI and AG-UI
+domain: architecture
+status: approved
+version: "1.0.0"
+rule: >-
+  Applications providing generative or agent-driven interactive tools (such as financial, utility, and budget
+  calculators) must decouple the communication transport using AG-UI (Server-Sent Events) from the presentation
+  schema using A2UI (declarative flat adjacency list components), while implementing dual-tier reactivity (local
+  60fps math evaluation combined with server-side state delta advisory evaluation).
+do:
+  - Transport agent lifecycle, text streaming, tool calls, and state synchronizations using AG-UI event schemas (RunStartedEvent, TextMessageContentEvent, ToolCallStartEvent, CustomEvent, StateDeltaEvent).
+  - Define UI components (Cards, Sliders, Metrics, Choices) as declarative A2UI JSON payloads using flat adjacency lists (explicitList IDs) and RFC 6901 JSON pointer bindings (/loan/amount, /eb/units).
+  - Implement client-side micro-evaluation for direct manipulation controls (sliders) to deliver immediate 60fps responsiveness without round-trip latency.
+  - Dispatch debounced StateDeltaEvents to the backend advisory engine to provide proactive financial advice and tariff bracket breach warnings.
+dont:
+  - Do not allow agents to return raw HTML or unvetted JavaScript code to be evaluated on the client (prevents XSS vulnerabilities).
+  - Do not use deeply nested component JSON trees that cause LLM generation hallucinations; always use flat adjacency lists.
+  - Do not force the user to interact solely through text when numeric inputs and sliders provide superior user control.
+reason: >-
+  A2UI declarative component catalogs enforce strict security boundaries against UI injection, while AG-UI
+  standardizes real-time agent streaming. Combining this with dual-tier reactivity guarantees instant UI
+  responsiveness while preserving deep server-side agentic reasoning.
+related_items:
+  - ARCH-001
+  - DEV-001

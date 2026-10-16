@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniCalc Agent — A2UI + AG-UI Hybrid Calculator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 h-screen flex flex-col font-sans antialiased overflow-hidden">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700/80 px-6 py-3.5 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-lg shadow-md shadow-indigo-500/20">
+                Ω
+            </div>
+            <div>
+                <h1 class="text-base font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+                    OmniCalc Agent
+                    <span class="text-[10px] font-semibold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                        A2UI + AG-UI
+                    </span>
+                </h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Agent-User Interaction Protocol & Declarative Generative UI</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200/80 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300">
+                <span id="statusIndicator" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                <span id="statusText" class="font-medium">Connecting...</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dual-Pane Workspace -->
+    <main class="flex-1 flex overflow-hidden">
+
+        <!-- Left Pane: Agent Chat & Reasoning Stream (40% width) -->
+        <section class="w-full lg:w-[42%] flex flex-col bg-white dark:bg-slate-800/50 border-r border-slate-200 dark:border-slate-700/80 overflow-hidden">
+            <!-- Chat Header -->
+            <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/30">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Conversational Agent Stream (AG-UI)
+                </span>
+                <span class="text-[11px] text-slate-400 font-mono">SSE Stream</span>
+            </div>
+
+            <!-- Messages Stream Container -->
+            <div id="chatStream" class="flex-1 p-5 overflow-y-auto flex flex-col gap-3.5">
+                <!-- Message bubbles inserted dynamically -->
+            </div>
+
+            <!-- Quick Template Chips -->
+            <div class="px-5 py-2.5 bg-slate-50/80 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-700/40 flex items-center gap-2 overflow-x-auto shrink-0">
+                <span class="text-[11px] text-slate-400 font-medium shrink-0">Try:</span>
+                <button class="quick-chip shrink-0 text-xs px-2.5 py-1 rounded-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300 transition shadow-sm" data-prompt="Calculate home loan EMI for 400k at 6.5% for 30 years">
+                    🏠 Home Loan EMI
+                </button>
+                <button class="quick-chip shrink-0 text-xs px-2.5 py-1 rounded-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300 transition shadow-sm" data-prompt="Calculate electricity bill for 420 units domestic tariff with solar">
+                    ⚡ Tiered EB Bill
+                </button>
+                <button class="quick-chip shrink-0 text-xs px-2.5 py-1 rounded-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-300 transition shadow-sm" data-prompt="Help me plan my monthly budget with 50/30/20 rule on 6000 income">
+                    📊 50/30/20 Budget
+                </button>
+            </div>
+
+            <!-- Prompt Input Form -->
+            <div class="p-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shrink-0">
+                <div class="relative flex items-center">
+                    <input 
+                        type="text" 
+                        id="promptInput" 
+                        placeholder="Ask for a loan calculation, tariff breakdown, or budget..." 
+                        class="w-full bg-slate-100 dark:bg-slate-700/70 border border-slate-200 dark:border-slate-600 rounded-xl py-3 pl-4 pr-12 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                    />
+                    <button 
+                        id="sendBtn" 
+                        class="absolute right-2 p-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition shadow-sm flex items-center justify-center"
+                        title="Send Request"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Pane: Interactive A2UI Canvas (58% width) -->
+        <section class="flex-1 flex flex-col bg-slate-100/70 dark:bg-slate-900 overflow-hidden">
+            <!-- Canvas Header -->
+            <div class="px-6 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white/50 dark:bg-slate-800/40">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                        A2UI Declarative Native Canvas
+                    </span>
+                </div>
+                <div class="text-[11px] text-slate-400">
+                    Dual-Tier Reactivity (60fps Local + Agent Advisory)
+                </div>
+            </div>
+
+            <!-- Advisory Alerts Bar (Shows proactive recommendations on state deltas) -->
+            <div id="advisorySlot" class="px-6 pt-4 empty:hidden">
+                <!-- Injected dynamically -->
+            </div>
+
+            <!-- Dynamic A2UI Surface Canvas Container -->
+            <div class="flex-1 p-6 overflow-y-auto">
+                <div id="canvasContainer" class="max-w-2xl mx-auto flex flex-col gap-6">
+                    <!-- A2UI components rendered here -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Client Scripts -->
+    <script src="/static/agui_client.js"></script>
+    <script src="/static/a2ui_engine.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

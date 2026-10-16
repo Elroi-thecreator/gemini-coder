@@ -17,6 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const quickChips = document.querySelectorAll(".quick-chip");
 
     let currentMessageBubble = null;
+    let currentMessageText = "";
     let activeSurfaceId = null;
     let stateDebounceTimer = null;
 
@@ -30,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
         inner.className = `max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
             isUser
                 ? "bg-indigo-600 text-white rounded-br-none shadow-md"
-                : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700/80 rounded-bl-none shadow-sm"
+                : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-700/80 rounded-bl-none shadow-sm chat-markdown"
         }`;
         inner.innerHTML = initialText;
 
@@ -53,13 +54,25 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     agui.on("textMessageStart", () => {
+        currentMessageText = "";
         currentMessageBubble = appendChatBubble("assistant", "");
     });
 
     agui.on("textMessageContent", (data) => {
+        currentMessageText += data.delta;
         if (currentMessageBubble) {
-            currentMessageBubble.innerHTML += data.delta;
+            if (window.marked) {
+                currentMessageBubble.innerHTML = marked.parse(currentMessageText);
+            } else {
+                currentMessageBubble.textContent = currentMessageText;
+            }
             chatStream.scrollTop = chatStream.scrollHeight;
+        }
+    });
+
+    agui.on("textMessageEnd", () => {
+        if (currentMessageBubble && window.marked) {
+            currentMessageBubble.innerHTML = marked.parse(currentMessageText);
         }
     });
 
